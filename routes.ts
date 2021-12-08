@@ -1,38 +1,37 @@
 import { Context } from "https://deno.land/x/oak/mod.ts";
 import users from "./users.ts";
-import { makeJwt, setExpiration, Jose, Payload } from "https://deno.land/x/djwt/create.ts"
+import { create , getNumericDate, Payload } from "https://deno.land/x/djwt/mod.ts"
 import key from './key.ts'
 
-const header: Jose = {
-  alg: "HS256",
-  typ: "JWT",
-}
-
 export const login = async (ctx: Context) => {
-  const {value} = await ctx.request.body();
+  const result= await ctx.request.body();
   for (const user of users) {
-    if (value.username === user.username && value.password === user.password) {
-      const payload: Payload = {
-        iss: user.username,
-        exp: setExpiration(new Date().getTime() + 60000),
-      }
+    if (result.type === "json") {
+      const value = await result.value; // an object of parsed JSON
+      if (value.username === user.username && value.password === user.password) {
+        const payload: Payload = {
+          iss: user.username,
+          exp: getNumericDate(new Date().getTime() + 60000),
+        }
 
-      // Create JWT and send it to user
-      const jwt = makeJwt({key, header, payload});
-      if (jwt) {
-        ctx.response.status = 200;
-        ctx.response.body = {
-          id: user.id,
-          username: user.username,
-          jwt,
+        // Create JWT and send it to user
+        const jwt = await create({ alg: "HS512", typ: "JWT" }, payload, key);
+        
+        if (jwt) {
+          ctx.response.status = 200;
+          ctx.response.body = {
+            id: user.id,
+            username: user.username,
+            jwt,
+          }
+        } else {
+          ctx.response.status = 500;
+          ctx.response.body = {
+            message: 'Internal server error'
+          }
         }
-      } else {
-        ctx.response.status = 500;
-        ctx.response.body = {
-          message: 'Internal server error'
-        }
+        return;
       }
-      return;
     }
   }
 
